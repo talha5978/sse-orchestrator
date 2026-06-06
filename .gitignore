@@ -22,3 +22,5 @@ build/
 
 logs/
 *.log
+
+.npmrc
