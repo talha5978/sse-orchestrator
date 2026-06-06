@@ -1,0 +1,48 @@
+{
+	"name": "sse-orchestrator",
+	"version": "1.0.0",
+	"description": "A resilient, ultra-lightweight, type-safe client-side SSE orchestrator with dual ESM/CJS distribution, backoff-jitter reconnection pipelines, and extended HTTP configurations.",
+	"type": "module",
+	"main": "./dist/index.cjs",
+	"module": "./dist/index.js",
+	"types": "./dist/index.d.ts",
+	"exports": {
+		".": {
+			"types": "./dist/index.d.ts",
+			"import": "./dist/index.js",
+			"require": "./dist/index.cjs"
+		}
+	},
+	"files": [
+		"dist"
+	],
+	"scripts": {
+		"build": "tsup",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"format": "prettier --write \"**/*.{js,ts,tsx,jsx,json,md,css,scss}\""
+	},
+	"lint-staged": {
+		"**/*.{js,ts,tsx,jsx,json,md,css,scss}": [
+			"prettier --write"
+		]
+	},
+	"keywords": [
+		"sse",
+		"server-sent-events",
+		"streaming",
+		"llm",
+		"typescript",
+		"type-safe",
+		"fetch-stream"
+	],
+	"author": "Muhammad Talha",
+	"license": "MIT",
+	"devDependencies": {
+		"@types/node": "^25.9.2",
+		"prettier": "^3.8.3",
+		"tsup": "^8.1.0",
+		"typescript": "^6.0.3",
+		"vitest": "^1.6.0"
+	}
+}

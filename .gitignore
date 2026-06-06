@@ -1,0 +1,24 @@
+.env
+npm-debug.log*
+
+.react-router/
+
+.DS_Store
+
+stats.html
+
+/node_modules/
+
+dist/
+*.tsbuildinfo
+
+/dist/
+build/
+
+# React Router
+/.react-router/
+/build/
+.vscode/
+
+logs/
+*.log
