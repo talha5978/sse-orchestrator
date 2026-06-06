@@ -73,7 +73,7 @@ To run the included full-stack example:
 1. Clone the repository.
 
 ```bash
-git clone https://github.com/your-username/sse-orchestrator.git
+git clone https://github.com/talha5978/sse-orchestrator.git
 ```
 
 2. Install dependencies.
