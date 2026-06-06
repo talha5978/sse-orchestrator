@@ -16,6 +16,14 @@
 	"files": [
 		"dist"
 	],
+	"repository": {
+		"type": "git",
+		"url": "git+https://github.com/talha5978/sse-orchestrator.git"
+	},
+	"homepage": "https://github.com/talha5978/sse-orchestrator#readme",
+	"bugs": {
+		"url": "https://github.com/talha5978/sse-orchestrator/issues"
+	},
 	"scripts": {
 		"build": "tsup",
 		"test": "vitest run",
