@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
-import { SSEOrchestrator } from "../core.js";
-import type { SSEOrchestratorConfig, SSEStatus } from "../types.js";
+import { SSEOrchestrator } from "../../core.js";
+import type { SSEOrchestratorConfig, SSEStatus } from "../../types.js";
 
 export function useSSEOrchestrator<T extends Record<string, any>>(config: SSEOrchestratorConfig) {
 	const orchestratorRef = useRef<SSEOrchestrator<T> | null>(null);

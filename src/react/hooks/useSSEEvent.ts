@@ -1,6 +1,6 @@
 import { useEffect, useRef } from "react";
-import type { SSEOrchestrator } from "../core.js";
-import type { SSEEventMap } from "../types.js";
+import type { SSEOrchestrator } from "../../core.js";
+import type { SSEEventMap } from "../../types.js";
 
 export function useSSEEvent<T extends SSEEventMap, K extends keyof T>(
 	orchestrator: SSEOrchestrator<T>,

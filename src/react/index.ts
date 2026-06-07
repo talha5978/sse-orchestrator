@@ -1,2 +1,2 @@
-export * from "./useSSEEvent.js";
-export * from "./useSSEOrchestrator.js";
+export * from "./hooks/useSSEEvent.js";
+export * from "./hooks/useSSEOrchestrator.js";
