@@ -3,7 +3,7 @@ import { SSEOrchestrator } from "../../../../../dist/index.js";
 
 // Define our type-safe event payloads
 interface PipelineEvents {
-	job_started: { jobId: string; task: string; totalSteps: number };
+	job_started: { jobId: string; task: string };
 	step_progress: { step: number; name: string; progress: number };
 	artifact_ready: { artifactId: string; type: string; downloadUrl: string };
 	job_completed: { jobId: string; durationMs: number; rowsProcessed: number };
