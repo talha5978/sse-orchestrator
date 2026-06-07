@@ -1,6 +1,14 @@
-# sse-orchestrator
+<div align="center">
 
-A resilient Server-Sent Events (SSE) manager for Node.js and the browser. It handles automatic reconnections, state recovery, and typed event parsing for heavy background tasks, long-running workflows, and AI streaming.
+<img src="assets/github_logo.png" alt="sse-orchestrator" width="600" style="border-radius: 20px;" />
+
+*A resilient, ultra-lightweight, type-safe server sent events orchestrator.*
+
+[![npm version](https://img.shields.io/npm/v/sse-orchestrator.svg)](https://www.npmjs.com/package/sse-orchestrator) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
+
+</div>
+
+---
 
 ## Features
 
