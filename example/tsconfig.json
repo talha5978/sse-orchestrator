@@ -2,7 +2,9 @@
 	"extends": "../tsconfig.json",
 	"compilerOptions": {
 		"types": ["node"],
-		"module": "nodenext"
+		"module": "nodenext",
+		"rootDir": ".",
+		"noEmit": true
 	},
 	"include": ["**/*"]
 }

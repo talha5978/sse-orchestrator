@@ -1,8 +1,8 @@
-import { useEffect, useState } from "react";
-import { SSEOrchestrator } from "../../../../../dist/index.js";
+import { useState, useEffect } from "react";
+import { useSSEOrchestrator, useSSEEvent } from "../../../../../dist/react/index.js";
 import { Link } from "react-router";
 
-// Define our type-safe event payloads
+// Define our type-safe event payloads (unchanged)
 interface PipelineEvents {
 	job_started: { jobId: string; task: string };
 	step_progress: { step: number; name: string; progress: number };
@@ -12,13 +12,17 @@ interface PipelineEvents {
 
 export const meta = () => {
 	return [
-		{ title: "SSE Orchestrator Example" },
-		{ name: "description", content: "An example implementation using SSE Orchestrator." },
+		{ title: "SSE Hooks Example" },
+		{ name: "description", content: "An example implementation using SSE React Hooks." },
 	];
 };
 
-export default function Home() {
-	const [status, setStatus] = useState<string>("DISCONNECTED");
+export default function HooksExample() {
+	const { orchestrator, status } = useSSEOrchestrator<PipelineEvents>({
+		url: "http://localhost:4001",
+		method: "GET",
+	});
+
 	const [jobInfo, setJobInfo] = useState<{ id: string; name: string } | null>(null);
 	const [progress, setProgress] = useState<number>(0);
 	const [currentTask, setCurrentTask] = useState<string>("Awaiting server initialization...");
@@ -30,57 +34,34 @@ export default function Home() {
 	};
 
 	useEffect(() => {
-		// 1. Initialize the orchestrator INSIDE the effect
-		const orchestrator = new SSEOrchestrator<PipelineEvents>({
-			url: "http://localhost:4001",
-			method: "GET",
-		});
+		addLog(`System status shifted to: ${status}`);
+	}, [status]);
 
-		// 2. Bind network state mutations straight to our UI badges
-		orchestrator.onStatusChange((nextStatus) => {
-			setStatus(nextStatus);
-			console.log(nextStatus);
+	// 2. The Listeners: Fully type-safe, auto-binding, and auto-cleaning!
+	useSSEEvent(orchestrator, "job_started", (data) => {
+		setJobInfo({ id: data.jobId, name: data.task });
+		setCurrentTask("Initializing processing pipelines...");
+		addLog(`🏁 Pipeline Started: ${data.task} (${data.jobId})`);
+	});
 
-			addLog(`System status shifted to: ${nextStatus}`);
-		});
+	useSSEEvent(orchestrator, "step_progress", (data) => {
+		setProgress(data.progress);
+		setCurrentTask(data.name);
+		addLog(`⏳ Progress: Step ${data.step} - ${data.name} (${data.progress}%)`);
+	});
 
-		// 3. Register type-safe event hooks to update reactive states
-		orchestrator.on("job_started", (data) => {
-			setJobInfo({ id: data.jobId, name: data.task });
-			setCurrentTask("Initializing processing pipelines...");
-			addLog(`🏁 Pipeline Started: ${data.task} (${data.jobId})`);
-		});
+	useSSEEvent(orchestrator, "artifact_ready", (data) => {
+		setDownloadUrl(data.downloadUrl);
+		addLog(`📂 Generated Artifact: ${data.type} available for download.`);
+	});
 
-		orchestrator.on("step_progress", (data) => {
-			setProgress(data.progress);
-			setCurrentTask(data.name);
-			addLog(`⏳ Progress: Step ${data.step} - ${data.name} (${data.progress}%)`);
-		});
+	useSSEEvent(orchestrator, "job_completed", (data) => {
+		setProgress(100);
+		setCurrentTask("Job finished cleanly.");
+		addLog(`✅ Pipeline successfully completed in ${data.durationMs}ms.`);
+		orchestrator.disconnect();
+	});
 
-		orchestrator.on("artifact_ready", (data) => {
-			setDownloadUrl(data.downloadUrl);
-			addLog(`📂 Generated Artifact: ${data.type} available for download.`);
-		});
-
-		orchestrator.on("job_completed", (data) => {
-			setProgress(100);
-			setCurrentTask("Job finished cleanly.");
-			addLog(`✅ Pipeline successfully completed in ${data.durationMs}ms.`);
-			orchestrator.disconnect();
-		});
-
-		// 4. Ignite the socket engine connection
-		orchestrator.connect();
-
-		// 5. THE CRITICAL CLEANUP: Disconnect instantly if the component unmounts
-		// This stops React Strict Mode from opening duplicate parallel network requests!
-		return () => {
-			addLog("Tearing down connection hooks...");
-			orchestrator.disconnect();
-		};
-	}, []);
-
-	// Helper map to style our connection indicator badge
 	const badgeColors: Record<string, string> = {
 		CONNECTED: "bg-green-500 text-white animate-pulse",
 		CONNECTING: "bg-yellow-500 text-black",
@@ -94,8 +75,8 @@ export default function Home() {
 				{/* Header Panel */}
 				<div className="flex justify-between items-center border-b border-slate-800 pb-4">
 					<div>
-						<h1 className="text-2xl font-bold tracking-tight text-white">SSE Orchestrator Hub</h1>
-						<p className="text-slate-400 text-sm">Real-time distributed workflow monitor</p>
+						<h1 className="text-2xl font-bold tracking-tight text-white">SSE Hooks Hub</h1>
+						<p className="text-slate-400 text-sm">Zero-boilerplate reactive implementation</p>
 					</div>
 					<span
 						className={`px-3 py-1 rounded-full text-xs font-mono font-bold uppercase tracking-wider ${badgeColors[status] || "bg-gray-500"}`}
@@ -166,11 +147,8 @@ export default function Home() {
 			</div>
 
 			<div className="text-center text-sm mt-6">
-				<Link
-					to="/hooks-implementation"
-					className="text-indigo-400 hover:text-indigo-300 transition-colors"
-				>
-					Go to Hooks Implementation
+				<Link to="/" className="text-indigo-400 hover:text-indigo-300 transition-colors">
+					Go to Home
 				</Link>
 			</div>
 		</div>
