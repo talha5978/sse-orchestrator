@@ -114,6 +114,161 @@ npm run dev
 
 ---
 
+## API Documentation
+
+This guide details the core API of the `SSEOrchestrator` class and the utility provided by the React hooks package.
+
+### 1. `SSEOrchestrator` (Core Library)
+
+The SSEOrchestrator is the heart of the library. It manages the lifecycle of the Fetch-based stream connection, handles advanced reconnection strategies (backoff/jitter), and provides a type-safe event-driven interface.
+
+#### Public API Reference
+
+| Method                     | Description                                                                                                                          |
+| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
+| `connect()`                | Initiates the HTTP stream request. Automatically handles reconnection pipelines if the stream is interrupted.           |
+| `disconnect()`             | Aborts the active fetch request and cleans up all event listeners. Essential for preventing memory leaks on component unmount. |
+| `on(event, callback)`      | Registers a listener for a specific event type. Returns an unsubscribe function that removes the listener.                           |
+| `onStatusChange(callback)` | Registers a global listener for connection status changes (e.g., CONNECTED, DISCONNECTED, RETRYING).                    |
+| `getStatus()`              | Returns the current connection status synchronously.                                                                                 |
+
+> **TypeScript Tip**
+>
+>When using TypeScript, provide your event schema as a generic type: `new SSEOrchestrator<MyEvents>({...})`. This ensures full autocompletion for event names and payloads.
+
+### 2. React Hooks API
+
+The React hooks abstraction removes the need for manual `useEffect` lifecycle management, allowing you to focus on building UI.
+
+#### `useSSEOrchestrator<T>`
+
+This hook manages a stable `SSEOrchestrator` instance and exposes its connection state to your components.
+
+##### Parameters
+
+| Parameter | Type                    | Description                                                              |
+| --------- | ----------------------- | ------------------------------------------------------------------------ |
+| `config`  | `SSEOrchestratorConfig` | Configuration object containing `url`, `method`, and optional `headers`. |
+
+##### Returns
+
+| Property       | Type                 | Description                                                     |
+| -------------- | -------------------- | --------------------------------------------------------------- |
+| `orchestrator` | `SSEOrchestrator<T>` | A stable orchestrator instance that persists across re-renders. |
+| `status`       | `ConnectionStatus`   | A reactive string representing the current connection state.    |
+
+##### Why use it?
+
+**Stable Instance**
+
+Initializes the orchestrator once using `useRef`, ensuring that event listeners and orchestrator configuration are not recreated during normal component re-renders.
+
+**Lifecycle Management**
+
+Automatically calls:
+
+* `connect()` when the component mounts.
+* `disconnect()` when the component unmounts.
+
+**Strict Mode Safe**
+
+Integrates cleanly with React's lifecycle and cleanup patterns, ensuring that network streams are properly closed during unmounts and preventing duplicate parallel connections in React Strict Mode.
+
+#### `useSSEEvent<T, K>`
+
+This hook registers an event listener and binds it to the component lifecycle.
+
+##### Parameters
+
+| Parameter      | Type                      | Description                                    |
+| -------------- | ------------------------- | ---------------------------------------------- |
+| `orchestrator` | `SSEOrchestrator<T>`      | The instance returned by `useSSEOrchestrator`. |
+| `eventName`    | `K`                       | The specific event key to subscribe to.        |
+| `callback`     | `(payload: T[K]) => void` | Function executed when the event is received.  |
+
+##### Why use it?
+
+**Auto Cleanup**
+
+Uses the unsubscribe function returned by the orchestrator to automatically remove event listeners when the component unmounts.
+
+**Stale Closure Protection**
+
+Stores the callback in a `useRef`, ensuring that if the component re-renders and the callback changes, the latest callback logic is executed without requiring a new event subscription.
+
+This avoids unnecessary subscribe/unsubscribe cycles while keeping event handlers up to date.
+
+---
+
+## Implementation Comparison
+
+### Manual Implementation (Imperative)
+
+Requires explicit lifecycle management, connection setup, and cleanup.
+
+```typescript
+useEffect(() => {
+  const orchestrator = new SSEOrchestrator({...});
+
+  orchestrator.onStatusChange((nextStatus) => {
+    // handle status change
+  });
+
+  orchestrator.on("event", (data) => {
+    // handle event
+  });
+
+  orchestrator.connect();
+
+  return () => {
+    orchestrator.disconnect();
+  };
+}, []);
+```
+
+### Hooks Implementation (Declarative)
+
+Provides a cleaner and more maintainable API with minimal boilerplate.
+
+```typescript
+const { orchestrator, status } =
+  useSSEOrchestrator<PipelineEvents>({
+    url: "http://localhost:4001/stream",
+    method: "GET",
+  });
+
+useSSEEvent(orchestrator, "job_started", (data) => {
+  // Handle event
+});
+```
+
+### Benefits of the Hooks Approach
+
+* Less boilerplate code.
+* Automatic lifecycle management.
+* Easier to read and maintain.
+* Type-safe event subscriptions.
+* Better React integration.
+* Prevents common SSE cleanup mistakes.
+
+## Recommended Usage
+
+For React applications, prefer using:
+
+* `useSSEOrchestrator`
+* `useSSEEvent`
+
+These hooks provide the best developer experience while automatically managing connection and subscription lifecycles.
+
+Use the core `SSEOrchestrator` directly when:
+
+* Working outside React.
+* Building framework-agnostic libraries.
+* Creating custom abstractions on top of the orchestrator.
+* Integrating with Vue, Svelte, Angular, or vanilla JavaScript applications.
+
+---
+
 ## Use Cases
 
 - AI streaming applications
