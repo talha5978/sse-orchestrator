@@ -98,7 +98,7 @@ describe("SSEOrchestrator - Unit Engine Verification", () => {
 
 	it("should initiate exponential backoff reconnection procedures if network layers fail", async () => {
 		// 1. Force the initial fetch connection attempt to fail
-		vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error("Network Interrupted Failure"));
+		vi.mocked(globalThis.fetch).mockRejectedValueOnce(new Error("[TEST] Network Interrupted Failure"));
 
 		// 2. Setup the successful secondary stream for the recovery hook
 		const recoveryChunks = ['event: token\ndata: {"text": "Recovered"}\n\n'];

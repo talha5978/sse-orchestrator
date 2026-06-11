@@ -1,13 +1,7 @@
 import { SSEOrchestrator } from "../../dist/index.js";
+import type { JobEventMap } from "./types.js";
 
-interface AutomationPipelineEvents {
-	job_started: { jobId: string; task: string; totalSteps: number };
-	step_progress: { step: number; name: string; progress: number; status: string };
-	artifact_ready: { artifactId: string; type: string; downloadUrl: string };
-	job_completed: { jobId: string; durationMs: number; rowsProcessed: number };
-}
-
-const orchestrator = new SSEOrchestrator<AutomationPipelineEvents>({
+const orchestrator = new SSEOrchestrator<JobEventMap>({
 	url: "http://localhost:4001",
 	method: "GET",
 });

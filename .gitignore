@@ -8,6 +8,7 @@ npm-debug.log*
 stats.html
 
 /node_modules/
+node_modules
 
 dist/
 *.tsbuildinfo

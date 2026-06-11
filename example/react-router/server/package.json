@@ -1,0 +1,16 @@
+{
+	"name": "server",
+	"version": "1.0.0",
+	"description": "Simple express js server for the /server demonstration",
+	"license": "ISC",
+	"author": "",
+	"type": "module",
+	"main": "./src/index.ts",
+	"scripts": {
+		"start": "node src/index.ts"
+	},
+	"devDependencies": {
+		"@types/express": "^5.0.6",
+		"express": "^5.2.1"
+	}
+}
