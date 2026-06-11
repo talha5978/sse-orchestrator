@@ -147,12 +147,17 @@ export class SSEOrchestrator<T extends SSEEventMap> {
 			this.setStatus("CONNECTED");
 			this.retryCount = 0;
 
-			this.consumeStream(response.body.getReader());
+			this.consumeStream(response.body);
 		} catch (error) {
 			if (this.abortController?.signal.aborted) {
 				this.setStatus("DISCONNECTED");
 				return;
 			}
+
+			if (typeof process !== "undefined") {
+				console.error("⚠️ SSE Orchestrator Connection Error:", error);
+			}
+
 			this.scheduleReconnection();
 		}
 	}
@@ -160,107 +165,78 @@ export class SSEOrchestrator<T extends SSEEventMap> {
 	/**
 	 * Processes chunked network fragments asynchronously to ensure zero data boundary loss
 	 */
-	private async consumeStream(reader: ReadableStreamDefaultReader<Uint8Array>): Promise<void> {
+	private async consumeStream(streamBody: any): Promise<void> {
 		const decoder = new TextDecoder("utf-8");
 		let buffer = "";
 
-		try {
-			while (true) {
-				const { value, done } = await reader.read();
-				if (done) {
-					break;
-				}
-
-				buffer += decoder.decode(value, { stream: true });
-
-				// Handle line boundary cross-platform variations (\r\n and \n)
-				const lines = buffer.split(/\r?\n/);
-
-				for (const line of lines) {
-					const trimmedLine = line.trim();
-					if (!trimmedLine) continue;
-					if (trimmedLine.startsWith("id:")) {
-						this.lastEventId = trimmedLine.replace("id:", "").trim();
-						continue;
-					}
-				}
-
-				// Retain the final un-terminated block segment in the buffer array
-				buffer = lines.pop() ?? "";
-
-				this.parseBufferedLines(lines);
-			}
-
-			// If the stream ended gracefully but left dangling values, clear them out
-			if (this.status === "CONNECTED") {
-				this.scheduleReconnection();
-			}
-		} catch (error) {
-			if (!this.abortController?.signal.aborted) {
-				this.scheduleReconnection();
-			}
-		} finally {
-			try {
-				reader.releaseLock();
-			} catch {
-				// Suppress reference assignment lock errors on hard terminations
-			}
-		}
-	}
-
-	private parseBufferedLines(lines: string[]): void {
 		let currentEvent = "message";
 		let currentData = "";
 
-		for (const line of lines) {
-			const trimmed = line.trim();
+		try {
+			for await (const chunk of streamBody) {
+				buffer += decoder.decode(chunk, { stream: true });
 
-			// Empty transmission frame marks messages completion phase
-			if (trimmed === "") {
-				if (currentData !== "") {
-					let emittedPayload: any = currentData;
-					try {
-						if (
-							(currentData.startsWith("{") && currentData.endsWith("}")) ||
-							(currentData.startsWith("[") && currentData.endsWith("]"))
-						) {
-							emittedPayload = JSON.parse(currentData);
+				let boundaryIndex = buffer.indexOf("\n\n");
+				while (boundaryIndex !== -1) {
+					const block = buffer.slice(0, boundaryIndex).trim();
+					buffer = buffer.slice(boundaryIndex + 2);
+
+					if (block) {
+						const lines = block.split(/\r?\n/);
+
+						for (const line of lines) {
+							const trimmed = line.trim();
+							if (trimmed.startsWith(":")) continue;
+
+							const colonIndex = trimmed.indexOf(":");
+							let field = trimmed;
+							let value = "";
+
+							if (colonIndex !== -1) {
+								field = trimmed.slice(0, colonIndex).trim();
+								value = trimmed.slice(colonIndex + 1).trim();
+							}
+
+							switch (field) {
+								case "event":
+									currentEvent = value;
+									break;
+								case "data":
+									currentData = currentData === "" ? value : `${currentData}\n${value}`;
+									break;
+								case "id":
+									this.lastEventId = value;
+									break;
+							}
 						}
-					} catch {
-						// Revert back safely onto standard string outputs if validation fails
+
+						if (currentData !== "") {
+							let emittedPayload: any = currentData;
+							try {
+								if (
+									(currentData.startsWith("{") && currentData.endsWith("}")) ||
+									(currentData.startsWith("[") && currentData.endsWith("]"))
+								) {
+									emittedPayload = JSON.parse(currentData);
+								}
+							} catch {
+								// Fallback onto raw text safely
+							}
+							this.emit(currentEvent, emittedPayload);
+							currentData = "";
+						}
+						currentEvent = "message";
 					}
-					this.emit(currentEvent, emittedPayload);
-					currentData = "";
+
+					boundaryIndex = buffer.indexOf("\n\n");
 				}
-				currentEvent = "message";
-				continue;
 			}
 
-			if (trimmed.startsWith(":")) {
-				continue; // Filter active gateway connection heartbeats safely
-			}
-
-			const colonIndex = trimmed.indexOf(":");
-			let field = trimmed;
-			let value = "";
-
-			if (colonIndex !== -1) {
-				field = trimmed.slice(0, colonIndex).trim();
-				value = trimmed.slice(colonIndex + 1).trim();
-			}
-
-			switch (field) {
-				case "event":
-					currentEvent = value;
-					break;
-				case "data":
-					currentData = currentData === "" ? value : `${currentData}\n${value}`;
-					break;
-				case "id":
-					this.lastEventId = value;
-					break;
-				default:
-					break;
+			this.setStatus("DISCONNECTED");
+		} catch (error) {
+			if (!this.abortController?.signal.aborted) {
+				console.error("⚠️ SSE Orchestrator Active Stream Processing Error:", error);
+				this.scheduleReconnection();
 			}
 		}
 	}
