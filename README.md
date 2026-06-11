@@ -198,6 +198,82 @@ Stores the callback in a `useRef`, ensuring that if the component re-renders and
 
 This avoids unnecessary subscribe/unsubscribe cycles while keeping event handlers up to date.
 
+### 3. Server SDK (`SSEServerStream`)
+
+The `/server` entrypoint provides a lightweight, framework-agnostic wrapper around Node.js network primitives. It handles type-safe event dispatching, automatic compression buffer flushing, and cross-case state recovery parsing out of the box.
+
+Because it operates directly on native `IncomingMessage` and `ServerResponse` interfaces, it integrates seamlessly into native HTTP servers, Express, Fastify, and more without complex adapters.
+
+#### Quick Start (Express Example)
+
+```typescript
+import express from "express";
+import { SSEServerStream } from "sse-orchestrator/server";
+
+const app = express();
+
+interface MyEvents {
+    step_progress: { progress: number; task: string };
+    job_completed: { durationMs: number };
+}
+
+app.get("/stream", (req, res) => {
+    // 1. Initialize the type-safe stream wrapper
+    const stream = new SSEServerStream<MyEvents>(req, res, { allowOrigin: "*" });
+
+    // 2. Read the client's recovery position seamlessly
+    const lastId = stream.lastEventId ? parseInt(stream.lastEventId, 10) : 0;
+    console.log(`Resuming stream from index: ${lastId}`);
+
+    // 3. Dispatch type-safe continuous updates
+    stream.send({
+        event: "step_progress",
+        data: { progress: 50, task: "Processing buffers" },
+        id: "1"
+    });
+
+    // 4. Terminate cleanly with optional terminal payloads
+    stream.end({
+        event: "job_completed",
+        data: { durationMs: 1200 },
+        id: "2"
+    });
+});
+```
+
+#### Public API Reference
+
+##### Constructor Configuration
+
+```typescript
+new SSEServerStream(req, res, options?);
+```
+
+| Option | Type | Description |
+| :--- | :--- | :--- |
+| `allowOrigin` | `string` | Fallback Access-Control-Allow-Origin token string (Defaults to `*`). Ignored if host application router headers are pre-configured. |
+| `customHeaders` | `Record<string, string>` | Custom key-value dictionary to append to the initial wire sequence handshake. |
+
+##### Properties & Methods
+
+| Feature | Type / Signature | Description |
+| :--- | :--- | :--- |
+| `lastEventId` | `string \| null` | Contains the string identifier extracted automatically from incoming `last-event-id` or `Last-Event-ID` request headers. |
+| `send()` | `(config: { event: K; data: T[K]; id?: string \| number }) => void` | Serializes payloads directly into strict standard wire formats and flushes downstream compression pipes instantly. |
+| `end()` | `(finalEvent?: { event: K; data: T[K]; id?: string \| number }) => void` | Transmits an optional final event block and gracefully commands the native HTTP socket pipeline to terminate. |
+
+> **Framework Polyfills & Interceptors**
+> 
+> `SSEServerStream` includes native compatibility guards for third-party optimization tools. If your runtime uses Express compression middleware, the engine automatically catches the interceptor `.flush()` hook to enforce real-time block deliveries down the wire without buffering stalls.
+
+### Bonus: Update Your `Local Development` Code Snippet
+
+```bash
+// mock servers
+node example/llm-chat-stream/server2.ts
+node example/task-automation-pipeline/server2.ts
+```
+
 ---
 
 ## Implementation Comparison
