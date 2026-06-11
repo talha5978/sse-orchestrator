@@ -1,5 +1,5 @@
 import { useState, useEffect } from "react";
-import { useSSEOrchestrator, useSSEEvent } from "../../../../../dist/react/index.js";
+import { useSSEOrchestrator, useSSEEvent, useSSEMiddleware } from "../../../../../dist/react/index.js";
 import { Link } from "react-router";
 
 // Define our type-safe event payloads (unchanged)
@@ -21,6 +21,13 @@ export default function HooksExample() {
 	const { orchestrator, status } = useSSEOrchestrator<PipelineEvents>({
 		url: "http://localhost:4001",
 		method: "GET",
+	});
+
+	useSSEMiddleware(orchestrator, (event) => {
+		if (event.type === "step_progress") {
+			event.data.name += "#####";
+		}
+		return event;
 	});
 
 	const [jobInfo, setJobInfo] = useState<{ id: string; name: string } | null>(null);
