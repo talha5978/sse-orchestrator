@@ -4,6 +4,8 @@ import type {
 	SSEStatus,
 	StatusCallback,
 	EventCallback,
+	SSEMiddleware,
+	SSEEventContext,
 } from "./types.js";
 
 export class SSEOrchestrator<T extends SSEEventMap> {
@@ -25,6 +27,8 @@ export class SSEOrchestrator<T extends SSEEventMap> {
 	// Dedicated, isolated registries to prevent structural type pollution
 	private readonly listeners: Map<string, Set<EventCallback<any>>> = new Map();
 	private readonly statusListeners: Set<StatusCallback> = new Set();
+
+	private middlewares: SSEMiddleware<T>[] = [];
 
 	constructor(config: SSEOrchestratorConfig) {
 		this.url = config.url;
@@ -51,6 +55,21 @@ export class SSEOrchestrator<T extends SSEEventMap> {
 		return () => {
 			this.statusListeners.delete(callback);
 		};
+	}
+
+	/**
+	 * Registers a global middleware interceptor to process or filter events before they are emitted
+	 */
+	public use(middleware: SSEMiddleware<T>): this {
+		this.middlewares.push(middleware);
+		return this;
+	}
+
+	/**
+	 * Surgically removes a specific middleware instance from the pipeline execution stack
+	 */
+	public ejectMiddleware(middleware: SSEMiddleware<T>): void {
+		this.middlewares = this.middlewares.filter((m) => m !== middleware);
 	}
 
 	/**
@@ -222,7 +241,34 @@ export class SSEOrchestrator<T extends SSEEventMap> {
 							} catch {
 								// Fallback onto raw text safely
 							}
-							this.emit(currentEvent, emittedPayload);
+
+							let context: SSEEventContext<T> | null = {
+								type: currentEvent as Extract<keyof T, string>,
+								data: emittedPayload,
+							};
+
+							// Run the parsed payload sequentially through all registered middlewares
+							for (const middleware of this.middlewares) {
+								try {
+									const result = middleware(context as SSEEventContext<T>);
+									if (result === null || result === false) {
+										context = null; // Mark as dropped
+										break; // Stop execution chain immediately
+									}
+									context = result; // Carry modified context forward
+								} catch (middlewareError) {
+									console.error(
+										"❌ SSE Orchestrator Middleware Execution Error:",
+										middlewareError,
+									);
+								}
+							}
+
+							// Only trigger handlers if the event wasn't explicitly canceled by a middleware layer
+							if (context) {
+								this.emit(context.type, context.data);
+							}
+
 							currentData = "";
 						}
 						currentEvent = "message";

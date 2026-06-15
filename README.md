@@ -2,7 +2,7 @@
 
 <img src="assets/github_logo.png" alt="sse-orchestrator" width="600" style="border-radius: 20px;" />
 
-*A resilient, ultra-lightweight, type-safe server sent events orchestrator.*
+*A resilient, ultra-lightweight, type-safe server-sent events orchestrator.*
 
 [![npm version](https://img.shields.io/npm/v/sse-orchestrator.svg)](https://www.npmjs.com/package/sse-orchestrator) [![License: MIT](https://img.shields.io/badge/License-MIT-blue.svg)](https://opensource.org/licenses/MIT)
 
@@ -12,13 +12,13 @@
 
 ## Features
 
-- **Auto-reconnection**: Automatically reconnects when the connection is interrupted.
-- **State recovery**: Uses `Last-Event-ID` to resume streams from the last successful event.
-- **Type-safe**: Fully written in TypeScript with generic event payload support.
-- **Zero dependencies**: Lightweight and browser-friendly.
-- **Framework agnostic**: Works with React, Vue, Svelte, Angular, or plain JavaScript.
-- **Custom headers support**: Send authentication tokens and custom request headers.
-- **Event-driven API**: Subscribe to typed events with a simple API.
+- **Auto-reconnection**: Automatically reconnects when the connection is interrupted with backoff/jitter strategies.
+- **State recovery**: Uses `Last-Event-ID` to resume streams seamlessly from the exact point of failure.
+- **Type-safe**: Built from the ground up in TypeScript with generic event payload support and automatic type-narrowing.
+- **Global Middleware Engine**: Intercept, mutate, or intercept event streams sequentially before downstream execution.
+- **Zero dependencies**: Lightweight, efficient, and browser-friendly.
+- **Framework agnostic**: Works natively with React, Vue, Svelte, Angular, or plain JavaScript.
+- **Custom headers support**: Send authentication tokens and custom request headers dynamically.
 
 ## Installation
 
@@ -32,22 +32,21 @@ npm install sse-orchestrator
 
 Traditional SSE clients reconnect automatically but often lose workflow progress after a network interruption.
 
-`sse-orchestrator` sends the last successfully processed event ID using the `Last-Event-ID` header during reconnection. This allows your server to resume the stream exactly where it stopped instead of restarting the entire process.
+`sse-orchestrator` sends the last successfully processed event ID using the `Last-Event-ID` header during reconnection. This allows your server to resume the stream exactly where it stopped instead of restarting the entire intensive process.
 
 This is especially useful for:
 
-- AI response streaming
+- AI response token streaming
 - File processing pipelines
 - Video transcoding jobs
-- Report generation
-- Long-running background tasks
-- Real-time workflow systems
+- Long-running background database tasks
+- Real-time workflow automation systems
 
 ---
 
 ## How State Recovery Works
 
-Instead of complex architectures, `sse-orchestrator` relies on a simple ping-pong of IDs between the browser and your server to ensure no data is lost.
+Instead of complex synchronization architectures, `sse-orchestrator` relies on a simple ping-pong of identifiers between the client application and your upstream server.
 
 ```mermaid
 sequenceDiagram
@@ -67,142 +66,153 @@ sequenceDiagram
 ```
 
 **What happens under the hood:**
-1. The client connects and tracks the ID of every incoming message.
-2. If the connection suddenly drops, the client catches the error.
-3. It immediately fires a new connection, attaching the last known ID to the HTTP headers.
-4. Your server reads that ID and skips directly to the uncompleted tasks.
+1. The client connects and tracks the ID of every incoming structured message block.
+2. If the connection suddenly drops, the client catches the connection error.
+3. It immediately fires an internal reconnection process, attaching the last known ID to the HTTP headers.
+4. Your server reads that ID and skips directly forward to the uncompleted tasks.
 
 ---
 
-## Local Development
+## Global Middleware Pipeline
 
-To run the included full-stack example:
+`sse-orchestrator` includes a powerful, type-safe middleware engine that allows you to intercept, mutate, or drop incoming Server-Sent Events before they ever reach your standard `.on()` event listeners. This is perfect for data parsing, logging, global sanitization, or telemetry collection.
 
-1. Clone the repository.
+### 1. Vanilla TypeScript Usage
 
-```bash
-git clone https://github.com/talha5978/sse-orchestrator.git
+The `.use()` method supports functional method chaining (the builder pattern). You can register multiple middleware layers sequentially. To surgically remove a middleware from the execution stack later, use `.ejectMiddleware()`.
+
+```typescript
+import { SSEOrchestrator, type SSEMiddleware } from "sse-orchestrator";
+
+interface AIEvents {
+    token: { text: string };
+    done: { totalTokens: number };
+}
+
+const orchestrator = new SSEOrchestrator<AIEvents>({ url: "/api/stream" });
+
+// Define a reusable, type-safe middleware function
+const appendNewline: SSEMiddleware<AIEvents> = (event) => {
+    // 💡 TypeScript magic: Checking event.type automatically narrows event.data!
+    if (event.type === "token") {
+        event.data.text += "\n"; 
+    }
+    return event;
+};
+
+// Chain middleware registrations seamlessly
+orchestrator
+    .use(appendNewline)
+    .use((event) => {
+        console.log(`[Middleware Log] Processing event: ${event.type}`);
+        return event; // Always return the mutated context
+    });
 ```
 
-2. Install dependencies.
+### 2. React Framework Integration
 
-```bash
-npm install
+When developing inside functional React components, registering middleware loosely inside the component body will trigger **re-render duplication bugs**. To prevent this, use the built-in `useSSEMiddleware` hook, which safely isolates the subscription footprint using stable references under the hood.
+
+```tsx
+import React from "react";
+import { useSSEOrchestrator, useSSEMiddleware } from "sse-orchestrator";
+
+interface PipelineEvents {
+    step_progress: { name: string };
+}
+
+export function PipelineDashboard() {
+    const { orchestrator, status } = useSSEOrchestrator<PipelineEvents>({
+        url: "http://localhost:4001",
+        method: "GET",
+    });
+
+    // ✅ Safe across infinite component re-renders. Zero-churn design.
+    useSSEMiddleware(orchestrator, (event) => {
+        if (event.type === "step_progress") {
+            event.data.name += " (Verified)";
+        }
+        return event;
+    });
+
+    return <div>Connection Status: {status}</div>;
+}
 ```
 
-3. Build the package.
+### 3. Canceling/Dropping Events
 
-```bash
-npm run build
-```
+Middleware execution works sequentially. If any middleware layer returns `null` or `false`, the orchestration pipeline immediately aborts execution, drops the payload, and protects downstream `.on()` listeners from ever firing.
 
-4. Run mock servers & clients
-
-```bash
-// mock servers
-node example/llm-chat-stream/server.ts
-node example/task-automation-pipeline/server.ts
-
-// mock clients
-npx tsx example/llm-chat-stream/client.ts
-npx tsx example/task-automation-pipeline/client.ts
-
-// mock app
-cd example/react-router/app/
-npm run dev
+```typescript
+orchestrator.use((event) => {
+    if (event.type === "token" && !event.data.text) {
+        return null; // ❌ Drops empty tokens completely from the pipeline stream
+    }
+    return event; // ✅ Allows valid payloads to progress forward
+});
 ```
 
 ---
 
 ## API Documentation
 
-This guide details the core API of the `SSEOrchestrator` class and the utility provided by the React hooks package.
+This guide details the core API of the `SSEOrchestrator` class and the utilities provided by the React hooks package.
 
 ### 1. `SSEOrchestrator` (Core Library)
 
-The SSEOrchestrator is the heart of the library. It manages the lifecycle of the Fetch-based stream connection, handles advanced reconnection strategies (backoff/jitter), and provides a type-safe event-driven interface.
+The `SSEOrchestrator` manages the lifecycle of the Fetch-based stream connection, handles advanced reconnection strategies, and provides a type-safe event-driven interface.
 
 #### Public API Reference
 
-| Method                     | Description                                                                                                                          |
-| -------------------------- | ------------------------------------------------------------------------------------------------------------------------------------ |
-| `connect()`                | Initiates the HTTP stream request. Automatically handles reconnection pipelines if the stream is interrupted.           |
-| `disconnect()`             | Aborts the active fetch request and cleans up all event listeners. Essential for preventing memory leaks on component unmount. |
-| `on(event, callback)`      | Registers a listener for a specific event type. Returns an unsubscribe function that removes the listener.                           |
-| `onStatusChange(callback)` | Registers a global listener for connection status changes (e.g., CONNECTED, DISCONNECTED, RETRYING).                    |
-| `getStatus()`              | Returns the current connection status synchronously.                                                                                 |
+| Method | Signature / Params | Description |
+| :--- | :--- | :--- |
+| `connect()` | `() => void` | Initiates the HTTP stream request. Automatically handles reconnection pipelines if the stream is interrupted. |
+| `disconnect()` | `() => void` | Aborts the active fetch request and cleans up all event listeners. Essential for preventing memory leaks. |
+| `on()` | `(event: K, callback: (data: T[K]) => void) => () => void` | Registers a listener for a specific event type. Returns an unsubscribe function. |
+| `use()` | `(middleware: SSEMiddleware<T>) => this` | Registers a global middleware interceptor. Supports fluent method chaining. |
+| `ejectMiddleware()` | `(middleware: SSEMiddleware<T>) => void` | Surgically removes a specific middleware instance from the execution stack. |
+| `onStatusChange()` | `(callback: (status: ConnectionStatus) => void) => () => void` | Registers a global listener for connection status transitions. |
+| `getStatus()` | `() => ConnectionStatus` | Returns the current connection status synchronously. |
 
-> **TypeScript Tip**
->
->When using TypeScript, provide your event schema as a generic type: `new SSEOrchestrator<MyEvents>({...})`. This ensures full autocompletion for event names and payloads.
+---
 
 ### 2. React Hooks API
 
-The React hooks abstraction removes the need for manual `useEffect` lifecycle management, allowing you to focus on building UI.
+The React hooks abstraction removes the need for manual lifecycle management, allowing you to focus on building UI.
 
 #### `useSSEOrchestrator<T>`
 
 This hook manages a stable `SSEOrchestrator` instance and exposes its connection state to your components.
 
 ##### Parameters
-
-| Parameter | Type                    | Description                                                              |
-| --------- | ----------------------- | ------------------------------------------------------------------------ |
-| `config`  | `SSEOrchestratorConfig` | Configuration object containing `url`, `method`, and optional `headers`. |
+* `config: SSEOrchestratorConfig` — Configuration object containing `url`, `method`, and optional `headers`.
 
 ##### Returns
-
-| Property       | Type                 | Description                                                     |
-| -------------- | -------------------- | --------------------------------------------------------------- |
-| `orchestrator` | `SSEOrchestrator<T>` | A stable orchestrator instance that persists across re-renders. |
-| `status`       | `ConnectionStatus`   | A reactive string representing the current connection state.    |
-
-##### Why use it?
-
-**Stable Instance**
-
-Initializes the orchestrator once using `useRef`, ensuring that event listeners and orchestrator configuration are not recreated during normal component re-renders.
-
-**Lifecycle Management**
-
-Automatically calls:
-
-* `connect()` when the component mounts.
-* `disconnect()` when the component unmounts.
-
-**Strict Mode Safe**
-
-Integrates cleanly with React's lifecycle and cleanup patterns, ensuring that network streams are properly closed during unmounts and preventing duplicate parallel connections in React Strict Mode.
+* `orchestrator: SSEOrchestrator<T>` — A stable orchestrator reference that persists across re-renders.
+* `status: ConnectionStatus` — A reactive state string representing the current connection loop.
 
 #### `useSSEEvent<T, K>`
 
-This hook registers an event listener and binds it to the component lifecycle.
+Registers an event listener and binds it cleanly to the component lifecycle.
 
 ##### Parameters
+* `orchestrator: SSEOrchestrator<T>` — The instance returned by `useSSEOrchestrator`.
+* `eventName: K` — The specific event key to subscribe to.
+* `callback: (payload: T[K]) => void` — Function executed when the event is received. Protected against stale closures via internal refs.
 
-| Parameter      | Type                      | Description                                    |
-| -------------- | ------------------------- | ---------------------------------------------- |
-| `orchestrator` | `SSEOrchestrator<T>`      | The instance returned by `useSSEOrchestrator`. |
-| `eventName`    | `K`                       | The specific event key to subscribe to.        |
-| `callback`     | `(payload: T[K]) => void` | Function executed when the event is received.  |
+#### `useSSEMiddleware<T>`
 
-##### Why use it?
+Safely hooks a global middleware interceptor directly into the React execution loop without incurring data pollution or multi-stacking bugs.
 
-**Auto Cleanup**
+##### Parameters
+* `orchestrator: SSEOrchestrator<T>` — The instance returned by `useSSEOrchestrator`.
+* `middleware: SSEMiddleware<T>` — The interceptor logic to append to the parsing pipeline.
 
-Uses the unsubscribe function returned by the orchestrator to automatically remove event listeners when the component unmounts.
-
-**Stale Closure Protection**
-
-Stores the callback in a `useRef`, ensuring that if the component re-renders and the callback changes, the latest callback logic is executed without requiring a new event subscription.
-
-This avoids unnecessary subscribe/unsubscribe cycles while keeping event handlers up to date.
+---
 
 ### 3. Server SDK (`SSEServerStream`)
 
-The `/server` entrypoint provides a lightweight, framework-agnostic wrapper around Node.js network primitives. It handles type-safe event dispatching, automatic compression buffer flushing, and cross-case state recovery parsing out of the box.
-
-Because it operates directly on native `IncomingMessage` and `ServerResponse` interfaces, it integrates seamlessly into native HTTP servers, Express, Fastify, and more without complex adapters.
+The `/server` entrypoint provides a lightweight wrapper around Node.js network primitives. It handles type-safe event dispatching, automatic compression buffer flushing, and cross-case state recovery parsing out of the box.
 
 #### Quick Start (Express Example)
 
@@ -243,35 +253,45 @@ app.get("/stream", (req, res) => {
 
 #### Public API Reference
 
-##### Constructor Configuration
-
-```typescript
-new SSEServerStream(req, res, options?);
-```
-
-| Option | Type | Description |
-| :--- | :--- | :--- |
-| `allowOrigin` | `string` | Fallback Access-Control-Allow-Origin token string (Defaults to `*`). Ignored if host application router headers are pre-configured. |
-| `customHeaders` | `Record<string, string>` | Custom key-value dictionary to append to the initial wire sequence handshake. |
-
 ##### Properties & Methods
 
 | Feature | Type / Signature | Description |
 | :--- | :--- | :--- |
-| `lastEventId` | `string \| null` | Contains the string identifier extracted automatically from incoming `last-event-id` or `Last-Event-ID` request headers. |
-| `send()` | `(config: { event: K; data: T[K]; id?: string \| number }) => void` | Serializes payloads directly into strict standard wire formats and flushes downstream compression pipes instantly. |
+| `lastEventId` | `string \| null` | Contains the identifier extracted automatically from incoming `Last-Event-ID` request headers. |
+| `send()` | `(config: { event: K; data: T[K]; id?: string \| number }) => void` | Serializes payloads directly into standard wire formats and flushes downstream compression pipes instantly. |
 | `end()` | `(finalEvent?: { event: K; data: T[K]; id?: string \| number }) => void` | Transmits an optional final event block and gracefully commands the native HTTP socket pipeline to terminate. |
 
-> **Framework Polyfills & Interceptors**
-> 
-> `SSEServerStream` includes native compatibility guards for third-party optimization tools. If your runtime uses Express compression middleware, the engine automatically catches the interceptor `.flush()` hook to enforce real-time block deliveries down the wire without buffering stalls.
+---
 
-### Bonus: Update Your `Local Development` Code Snippet
+## Local Development
 
+To run the included full-stack examples:
+
+1. Clone the repository.
+```bash
+git clone [https://github.com/talha5978/sse-orchestrator.git](https://github.com/talha5978/sse-orchestrator.git)
+cd sse-orchestrator
+```
+
+2. Install dependencies & build the binary.
+```bash
+npm install
+npm run build
+```
+
+3. Run mock servers & clients.
 ```bash
 // mock servers
 node example/llm-chat-stream/server2.ts
 node example/task-automation-pipeline/server2.ts
+
+// mock clients
+npx tsx example/llm-chat-stream/client.ts
+npx tsx example/task-automation-pipeline/client.ts
+
+// mock react app
+cd example/react-router/app/
+npm run dev
 ```
 
 ---
@@ -285,15 +305,7 @@ Requires explicit lifecycle management, connection setup, and cleanup.
 ```typescript
 useEffect(() => {
   const orchestrator = new SSEOrchestrator({...});
-
-  orchestrator.onStatusChange((nextStatus) => {
-    // handle status change
-  });
-
-  orchestrator.on("event", (data) => {
-    // handle event
-  });
-
+  orchestrator.on("event", (data) => { /* handle */ });
   orchestrator.connect();
 
   return () => {
@@ -307,52 +319,18 @@ useEffect(() => {
 Provides a cleaner and more maintainable API with minimal boilerplate.
 
 ```typescript
-const { orchestrator, status } =
-  useSSEOrchestrator<PipelineEvents>({
+const { orchestrator, status } = useSSEOrchestrator<PipelineEvents>({
     url: "http://localhost:4001/stream",
     method: "GET",
-  });
+});
 
 useSSEEvent(orchestrator, "job_started", (data) => {
   // Handle event
 });
 ```
 
-### Benefits of the Hooks Approach
-
-* Less boilerplate code.
-* Automatic lifecycle management.
-* Easier to read and maintain.
-* Type-safe event subscriptions.
-* Better React integration.
-* Prevents common SSE cleanup mistakes.
-
-## Recommended Usage
-
-For React applications, prefer using:
-
-* `useSSEOrchestrator`
-* `useSSEEvent`
-
-These hooks provide the best developer experience while automatically managing connection and subscription lifecycles.
-
-Use the core `SSEOrchestrator` directly when:
-
-* Working outside React.
-* Building framework-agnostic libraries.
-* Creating custom abstractions on top of the orchestrator.
-* Integrating with Vue, Svelte, Angular, or vanilla JavaScript applications.
-
 ---
 
-## Use Cases
+## License
 
-- AI streaming applications
-- Chat applications
-- Background job monitoring
-- Real-time dashboards
-- Workflow orchestration systems
-- File upload processing
-- Data import/export tracking
-- Event-driven applications
-
+Distributed under the MIT License. See `LICENSE` for more information.

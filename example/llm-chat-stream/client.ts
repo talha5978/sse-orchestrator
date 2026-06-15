@@ -1,4 +1,4 @@
-import { SSEOrchestrator } from "../../dist/index.js";
+import { SSEOrchestrator, type SSEMiddleware } from "../../dist/index.js";
 
 interface AIEvents {
 	token: { text: string };
@@ -10,6 +10,15 @@ const orchestrator = new SSEOrchestrator<AIEvents>({
 	method: "GET",
 	maxRetryDelay: 2000,
 });
+
+const logCompletion: SSEMiddleware<AIEvents> = (event) => {
+	if (event.type === "done") {
+		console.log(`[Middleware Log] Closing out stream containing tokens.`);
+	}
+	return event;
+};
+
+orchestrator.use(logCompletion);
 
 let outputText = "";
 

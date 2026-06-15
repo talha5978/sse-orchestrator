@@ -17,3 +17,14 @@ export interface SSEOrchestratorConfig {
 
 export type StatusCallback = (status: SSEStatus) => void;
 export type EventCallback<T> = (data: T) => void;
+
+export type SSEEventContext<T extends Record<string, any>> = {
+	[K in Extract<keyof T, string>]: {
+		type: K;
+		data: T[K];
+	};
+}[Extract<keyof T, string>];
+
+export type SSEMiddleware<T extends Record<string, any>> = (
+	context: SSEEventContext<T>,
+) => SSEEventContext<T> | null | false;

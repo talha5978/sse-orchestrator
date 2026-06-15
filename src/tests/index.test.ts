@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, vi, afterEach } from "vitest";
-import { SSEOrchestrator } from "./index.js";
+import { SSEOrchestrator } from "../index.js";
 
 describe("SSEOrchestrator - Unit Engine Verification", () => {
 	const targetUrl = "https://api.test-endpoint.com/v1/stream";
